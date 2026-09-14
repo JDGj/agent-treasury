@@ -44,4 +44,6 @@ jobs:
           assert bad == [], bad
           print("revenue.py reads nothing the agent writes")
           PY
+      - name: The example must run, and it is the README's proof
+        run: python example.py
       - run: python -m compileall -q treasury.py redact.py policy/
