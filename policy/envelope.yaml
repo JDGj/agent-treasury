@@ -1,0 +1,84 @@
+# The envelope. Human-owned, agent-readable, agent-immutable.
+#
+# This file is the capability boundary. The prompt states intent; this states
+# what is possible. Every `deny` line below has a test in test_envelope.py that
+# proves the refusal — a policy nobody tested is a comment.
+#
+# Changing this file requires a commit by a human. The agent cannot write it:
+# it is root-owned 644, the agent runs as `biz`, and `modifying_this_file` is
+# itself a deny line so that an agent that somehow could, still would not.
+
+budget:
+  # Two budgets, in two different units, because the business has two scarce
+  # things and they are not the same thing.
+  #
+  # EUROS are the business's own money. It starts with 50 and may spend more
+  # only by earning more: the ceiling is initial_capital_eur + revenue, read
+  # from Stripe. "Pode comprar coisas melhores desde que tenha saldo" is not a
+  # guideline here, it is the arithmetic in engine.spend_ceiling().
+  #
+  # TOKENS are not euros. The owner pays a flat 20 EUR/month Claude
+  # subscription out of his own pocket; the business is not billed per token,
+  # so counting tokens as spend would be an invented number. The ADR set
+  # token_cost_counts_as_spend: true because its section 9 assumed a Console
+  # spend limit, which means API billing. On the subscription there is no such
+  # limit and no HTTP 400 - what actually stops the agent is the rolling
+  # five-hour window, which is measured separately in limits.py and shown on
+  # the dashboard as a percentage of a ceiling observed the last time the plan
+  # refused. That is the real circuit breaker; it is just not a euro.
+  initial_capital_eur: 50
+  token_cost_counts_as_spend: false
+
+  # The per-transaction and daily caps are FRACTIONS of the ceiling, not fixed
+  # euros. Fixed at 20 they made the owner's own rule impossible: however much
+  # the business earned, it could never buy anything over 20 EUR, so "pode
+  # comprar coisas melhores" was false in code while true in the prompt.
+  #
+  # At 50 EUR of capital these come out at exactly the ADR's 20/20, so nothing
+  # is looser on day one - the constants simply became the starting value of a
+  # rule. At 148 EUR (two sales in) a single purchase may reach 59.
+  #
+  # 0.4 rather than something rounder because a business should never be one
+  # transaction away from broke: at most two full-size purchases before the
+  # daily cap stops it, and the daily cap is the same fraction, so a bad day
+  # costs at most 40% of everything it has.
+  per_tx_fraction: 0.4
+  daily_spend_fraction: 0.4
+  # Floors, so a business that has earned nothing can still buy a domain.
+  per_tx_min_eur: 15
+  daily_spend_min_eur: 15
+
+  # Model choice costs no euros on a subscription - it costs WINDOW. Opus took
+  # the five-hour window to 100% while the weekly sat at 11%. For finding
+  # customers, more Sonnet turns beat fewer Opus turns; Opus is for judgement,
+  # and every escalation says why in DECISIONS.md.
+  model: claude-sonnet-5
+  escalation_model: claude-opus-5
+  escalation_max_runs_per_week: 3
+  max_runs_per_day: 4
+
+allow:
+  spend_categories: [domains, hosting, saas_under_20eur_month, stock_assets]
+  payout_destinations: [OWNER_IBAN]
+  charge: true
+
+deny:
+  - crypto_any
+  - gambling
+  - paid_ads
+  - hiring_humans
+  - signing_contracts
+  - cold_outbound_email
+  - financial_instruments
+  - consumer_facing_without_ai_disclosure
+  - modifying_this_file
+
+death_condition:
+  # Not "balance = 0" - that only measures the infra bill. This measures the
+  # hypothesis. 14 rather than the ADR's 30 because with 50 EUR of capital,
+  # 34.28 EUR/month of fixed cost and the owner's 10-EUR-per-5-days penalty,
+  # the money runs out at about day 16 anyway. A death condition that fires
+  # after the money is gone is not a condition, it is an epitaph.
+  no_external_revenue_after_days: 14
+  # And the verifier is Stripe, never the agent's own account of itself.
+  revenue_source: stripe_api

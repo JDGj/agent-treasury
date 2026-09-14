@@ -1,0 +1,47 @@
+name: tests
+
+# Four files, four test suites, no network and no fixtures. Run on the oldest
+# Python the README promises and the newest that exists, because a promise
+# nobody tested is a promise that is true by accident.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  selftest:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.9", "3.11", "3.13"]
+    name: selftest (py${{ matrix.python }})
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: No dependencies, and that is the point
+        run: |
+          python -c "import sys; print(sys.version)"
+          test ! -f requirements.txt || (echo "this repo must stay dependency-free" && exit 1)
+      - run: python treasury.py demo
+      - run: python redact.py demo
+      - run: python policy/engine.py demo
+      - run: python policy/revenue.py demo
+      - name: The verifier must not be able to read what the agent writes
+        run: |
+          python - <<'PY'
+          import sys; sys.path.insert(0, "policy")
+          import inspect, revenue
+          src = inspect.getsource(sys.modules["revenue"])
+          bad = revenue.reads_agent_state(src)
+          assert bad == [], bad
+          print("revenue.py reads nothing the agent writes")
+          PY
+      - run: python -m compileall -q treasury.py redact.py policy/
