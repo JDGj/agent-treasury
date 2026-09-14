@@ -44,6 +44,10 @@ jobs:
           assert bad == [], bad
           print("revenue.py reads nothing the agent writes")
           PY
+      - name: The README must still describe the library
+        run: |
+          python check_readme.py --selftest
+          python check_readme.py
       - name: The example must run, and it is the README's proof
         run: python example.py
       - run: python -m compileall -q treasury.py redact.py policy/

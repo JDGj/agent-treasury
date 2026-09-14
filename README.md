@@ -134,6 +134,11 @@ wrong (`record()` does not refuse an unclassified spend; the envelope does)
 and one it had not mentioned at all (the daily ceiling refuses an allowed
 category once the money is spent).
 
+The README is checked too. `check_readme.py` binds every call shown here
+against the real signature -- without executing it -- so a renamed parameter
+fails the build the day it is renamed. It exists because the first code block
+above used to raise `TypeError`, and nothing ran it.
+
 Each file also runs its own tests, with no network and no fixtures:
 
 ```bash
